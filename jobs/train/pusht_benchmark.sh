@@ -44,7 +44,7 @@ if command -v nvidia-smi &> /dev/null; then
 fi
 
 # Set environment variables
-export WANDB_API_KEY='d47c0bfd84b46e8364f863f142e4fa03c425500e'
+export WANDB_API_KEY='YOUR_API_KEY'
 export PYTHONPATH=.
 export HYDRA_FULL_ERROR=1
 
