@@ -1,0 +1,21 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=32G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=train_consistency_n6
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "Training Consistency on Hard Move n=6 (64 actions)"
+python train.py --config-name=train_consistency_hard_move_n6
+echo "Done at $(date)"

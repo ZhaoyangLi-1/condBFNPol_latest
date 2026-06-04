@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=dlpa_n8_resume
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Resume DLPA training for n=8 from existing checkpoint to get better expert
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT/_external/DLPA
+
+RESUME_CKPT="result/DLPA/simple_move_4_direction_v1/hard_move_n8_24h/world_model_0.pth"
+SAVE_DIR="hard_move_n8_resumed"
+
+echo "Resuming DLPA n=8 training from $RESUME_CKPT"
+echo "Save dir: $SAVE_DIR"
+
+python main.py \
+    --env 'simple_move_4_direction_v1-v0' \
+    --mpc_horizon 5 \
+    --action_n_dim 8 \
+    --model_type "concat" \
+    --save_points 0 \
+    --max_timesteps 100000 \
+    --eval_freq 2000 \
+    --seed 0 \
+    --save_dir $SAVE_DIR \
+    --resume_from $RESUME_CKPT
+
+echo "Done at $(date)"

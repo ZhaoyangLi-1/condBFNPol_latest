@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_hg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+BFN_CKPT="outputs/2026.05.01/22.13.48_train_bfn_hard_goal_hard_goal/checkpoints/latest.ckpt"
+DDPM_CKPT="outputs/2026.05.01/22.13.48_train_ddpm_hard_goal_hard_goal/checkpoints/latest.ckpt"
+
+echo "Evaluating Hard Goal (11 discrete + 2D continuous)"
+python scripts/eval_hard_goal.py \
+    --bfn_ckpt "$BFN_CKPT" \
+    --bfn10_ckpt "$BFN_CKPT" \
+    --ddpm_ckpt "$DDPM_CKPT" \
+    --ddim_ckpt "$DDPM_CKPT" \
+    --n_episodes 50
+
+echo "Done at $(date)"

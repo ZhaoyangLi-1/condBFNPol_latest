@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=a100:1
+#SBATCH --mem=80G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=ddim_pusht
+#SBATCH --output=$PROJECT_ROOT/jobs/logs/%x_%j.out
+#SBATCH --error=$PROJECT_ROOT/jobs/logs/%x_%j.err
+
+# Train DDIM (Denoising Diffusion Implicit Models) baseline on PushT
+# DDIM allows faster inference with fewer denoising steps (10 vs 100 for DDPM)
+
+# Adjust batch size based on GPU
+BATCH_SIZE=128  # For A100/A40. Use 32 for V100
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT
+
+# Use our train_workspace.py with the train_ddim_pusht config (same as DDPM)
+$HOME/.conda/envs/bfn/bin/python scripts/train_workspace.py \
+    --config-name=train_ddim_pusht \
+    dataloader.batch_size=${BATCH_SIZE} \
+    val_dataloader.batch_size=${BATCH_SIZE}

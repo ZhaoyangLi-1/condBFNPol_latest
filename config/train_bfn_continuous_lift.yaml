@@ -1,0 +1,188 @@
+# =============================================================================
+# Training configuration for BFN Policy with HYBRID action space
+# Task: Lift (RoboMimic) - 7D arm + discrete gripper
+# 
+# This config tests BFN's native discrete action handling via Dirichlet-Categorical
+# conjugacy, which should outperform Diffusion Policy's continuous relaxation.
+# =============================================================================
+
+# Workspace target
+_target_: workspaces.train_bfn_robomimic_workspace.TrainBFNRobomimicWorkspace
+
+# Experiment info
+name: train_bfn_hybrid
+task_name: lift_image
+exp_name: ablation_all_continuous
+
+# Shape meta (from lift_image dataset - 7D action)
+shape_meta:
+  obs:
+    agentview_image:
+      shape: [3, 84, 84]
+      type: rgb
+    robot0_eye_in_hand_image:
+      shape: [3, 84, 84]
+      type: rgb
+    robot0_eef_pos:
+      shape: [3]
+    robot0_eef_quat:
+      shape: [4]
+    robot0_gripper_qpos:
+      shape: [2]
+  action:
+    shape: [7]  # 6D delta pose + 1D gripper
+
+# ================== Horizons ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: 2
+past_action_visible: false
+keypoint_visible_rate: 1.0
+obs_as_global_cond: true
+
+# ================== Policy with HYBRID action handling ==================
+policy:
+  _target_: policies.bfn_hybrid_action_policy.BFNHybridActionPolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: 8
+  
+  # HYBRID ACTION CONFIG - Key difference from baseline
+  # Lift task has 7D action: 6D delta pose + 1D gripper (index 6)
+  discrete_action_indices: []  # ABLATION: Treat ALL dims as continuous (including gripper)
+  discrete_action_classes: []   # No discrete actions
+  
+  # BFN-specific config
+  sigma_1: 0.001      # Continuous noise schedule
+  beta_1: 0.2         # Discrete accuracy schedule
+  n_timesteps: 20
+  
+  # Vision encoder config (SAME as Diffusion)
+  crop_shape: [76, 76]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  
+  # U-Net config (SAME as Diffusion)
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== Task (Dataset + Env Runner) ==================
+task:
+  dataset:
+    _target_: diffusion_policy.dataset.robomimic_replay_image_dataset.RobomimicReplayImageDataset
+    shape_meta: ${shape_meta}
+    dataset_path: data/robomimic/datasets/lift/ph/image.hdf5
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    n_obs_steps: ${n_obs_steps}
+    abs_action: false
+    rotation_rep: rotation_6d
+    use_legacy_normalizer: false
+    use_cache: true
+    seed: 42
+    val_ratio: 0.02
+  
+  # env_runner disabled - requires mujoco_py for evaluation
+  # Training will work without it, just no rollout evaluation
+  env_runner: null
+
+# ================== EMA ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training ==================
+training:
+  device: cuda:0
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 600
+  gradient_accumulate_every: 1
+  use_ema: true
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+
+# ================== Dataloader ==================
+dataloader:
+  batch_size: 64
+  num_workers: 8
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 64
+  num_workers: 8
+  shuffle: false
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Checkpoint ==================
+# THESIS CONFIG: Minimal checkpointing to avoid disk quota issues
+# Only keep 1 best checkpoint, no last checkpoint
+checkpoint:
+  topk:
+    monitor_key: train_loss
+    mode: min
+    k: 1  # Only keep best checkpoint to save disk space
+    format_str: epoch={epoch:04d}-train_loss={train_loss:.4f}.ckpt
+  save_last_ckpt: false  # Don't save last - saves ~4GB per run
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: bfn_hybrid_discrete
+  resume: true
+  mode: offline  # Use offline mode - no API key needed on cluster
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags:
+    - ${name}
+    - ${task_name}
+    - ${exp_name}
+    - bfn
+    - hybrid
+    - discrete
+  id: null
+  group: null
+
+# ================== Multi-run ==================
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+# ================== Hydra ==================
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}_hybrid
+  sweep:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}_hybrid
+    subdir: ${hydra.job.num}

@@ -1,0 +1,35 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=16G
+#SBATCH --time=1:30:00
+#SBATCH --job-name=nfe_sweep
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-3
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+ARCH=$ARCHIVE_DIR
+ENVS=(hard_move_n4 hard_move_n6 hard_move_n8 goal)
+NACT=(4 6 8 0)
+CKPTS=(
+  "$ARCH/2026.04.29/14.03.32_train_bfn_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt"
+  "$ARCH/2026.04.29/14.56.56_train_bfn_hard_move_n6_hard_move_n6/checkpoints/latest.ckpt"
+  "$ARCH/2026.04.29/18.03.54_train_bfn_hard_move_n8_hard_move_n8/checkpoints/latest.ckpt"
+  "outputs/2026.05.04/23.00.11_train_bfn_goal_goal/checkpoints/latest.ckpt"
+)
+i=$SLURM_ARRAY_TASK_ID
+ENV=${ENVS[$i]}; CK=${CKPTS[$i]}; NA=${NACT[$i]}
+
+echo "NFE sweep: $ENV  ckpt=$CK"
+python scripts/nfe_sweep.py --env "$ENV" --ckpt "$CK" --n_actuators "$NA" \
+    --steps "1 2 4 8 10 20 30 40 50" --n_episodes 50 \
+    --out "results/nfe_sweep_${ENV}.json"
+echo "Done at $(date)"

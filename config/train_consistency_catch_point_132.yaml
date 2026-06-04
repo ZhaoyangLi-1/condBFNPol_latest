@@ -1,0 +1,136 @@
+# Training configuration for Consistency Policy with Catch Point (1-step)
+
+_target_: workspaces.train_bfn_workspace.TrainBFNWorkspace
+
+name: train_consistency_catch_point_132
+task_name: catch_point_132
+exp_name: consistency_catch_point_1step
+
+shape_meta:
+  obs:
+    state:
+      shape: [6]
+      type: low_dim
+  action:
+    shape: [3]
+
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: 2
+past_action_visible: false
+obs_as_global_cond: true
+
+policy:
+  _target_: policies.consistency_lowdim_policy.ConsistencyLowdimPolicy
+  obs_dim: 6
+  action_dim: 3
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  num_train_timesteps: 100
+  num_inference_steps: 1
+  sigma_min: 0.002
+  sigma_max: 80.0
+  rho: 7.0
+  ctm_weight: 1.0
+  dsm_weight: 1.0
+  delta: 0.0
+  teacher_path: outputs/2026.05.03/21.20.03_train_edm_catch_point_catch_point/checkpoints/latest.ckpt
+  obs_encoder_dims: [256, 256]
+  diffusion_step_embed_dim: 128
+  down_dims: [256, 512, 1024]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+  initial_ema_decay: 0.999
+
+task:
+  dataset:
+    _target_: dataset.catch_point_dataset.CatchPointContinuousDataset
+    zarr_path: data/catch_point/replay_filtered_132.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    seed: 42
+    val_ratio: 0.02
+  env_runner: null
+
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+training:
+  device: cuda:0
+  seed: 42
+  debug: false
+  resume: false
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 200
+  gradient_accumulate_every: 1
+  use_ema: true
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+
+dataloader:
+  batch_size: 128
+  num_workers: 4
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 128
+  num_workers: 4
+  shuffle: false
+  pin_memory: true
+  persistent_workers: false
+
+checkpoint:
+  topk:
+    monitor_key: train_loss
+    mode: min
+    k: 3
+    format_str: epoch={epoch:04d}-train_loss={train_loss:.4f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+logging:
+  project: consistency_catch_point
+  resume: true
+  mode: offline
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags: [consistency, catch_point, 1step]
+  id: null
+  group: null
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}

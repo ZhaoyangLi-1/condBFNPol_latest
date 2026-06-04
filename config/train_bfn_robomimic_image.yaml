@@ -1,0 +1,149 @@
+# Training configuration for BFN Policy on Robomimic tasks (Lift, Can, Square)
+# Uses the SAME architecture and parameters as train_diffusion_unet_hybrid_workspace.yaml
+# but with BFN sampling instead of DDPM
+
+defaults:
+  - _self_
+  - task@_global_: lift_image_abs
+
+# Workspace target
+_target_: workspaces.train_bfn_robomimic_workspace.TrainBFNRobomimicWorkspace
+
+# Experiment info
+name: train_bfn_robomimic
+task_name: ${task.name}
+shape_meta: ${task.shape_meta}
+exp_name: default
+
+# ================== Horizons (SAME as Diffusion) ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: ${n_obs_steps}
+past_action_visible: false
+keypoint_visible_rate: 1.0
+obs_as_global_cond: true
+
+# ================== Policy ==================
+policy:
+  _target_: policies.bfn_unet_hybrid_image_policy.BFNUnetHybridImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${eval:'${n_action_steps}+${n_latency_steps}'}
+  
+  # BFN-specific config
+  sigma_1: 0.001
+  n_timesteps: 20
+  
+  # Vision encoder config (SAME as Diffusion)
+  crop_shape: [76, 76]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  obs_as_global_cond: ${obs_as_global_cond}
+  
+  # U-Net config (SAME as Diffusion)
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== EMA (SAME as Diffusion) ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer (SAME as Diffusion) ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training (SAME as Diffusion) ==================
+training:
+  device: cuda:0
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 3050
+  gradient_accumulate_every: 1
+  use_ema: true
+  # Training loop control (in epochs)
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 5
+  # Steps per epoch
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+
+# ================== Dataloader (SAME as Diffusion) ==================
+dataloader:
+  batch_size: 64
+  num_workers: 8
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 64
+  num_workers: 8
+  shuffle: false
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task (loaded from defaults) ==================
+# Task config is loaded from diffusion_policy/config/task/lift_image_abs.yaml
+# Override with: task@_global_=can_image_abs or task@_global_=square_image_abs
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 5
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: bfn_robomimic
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+  tags:
+    - ${name}
+    - ${task_name}
+    - ${exp_name}
+    - bfn
+    - robomimic
+  id: null
+  group: null
+
+# ================== Multi-run ==================
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}_${task_name}
+
+# ================== Hydra ==================
+hydra:
+  job:
+    override_dirname: ${name}
+  run:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+  sweep:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}_${task_name}
+    subdir: ${hydra.job.num}
+

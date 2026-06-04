@@ -1,0 +1,183 @@
+# EDM Teacher Training Configuration for PushT
+#
+# This config trains an EDM (Elucidating Diffusion Models) policy
+# that serves as the teacher for Consistency Policy distillation.
+#
+# Run with: python train.py --config-name=train_edm_pusht
+#
+# After training, use the checkpoint path in train_consistency_pusht.yaml
+
+defaults:
+  - _self_
+
+# Workspace target
+_target_: workspaces.train_bfn_workspace.TrainBFNWorkspace
+
+# Experiment info
+name: train_edm_pusht
+exp_name: edm_teacher
+
+# ================== Horizons ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+
+# ================== Shape Meta ==================
+shape_meta:
+  action:
+    shape: [2]
+  obs:
+    agent_pos:
+      shape: [2]
+      type: low_dim
+    image:
+      shape: [3, 96, 96]
+      type: rgb
+
+# ================== Policy ==================
+policy:
+  _target_: policies.edm_policy.EDMImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  # EDM Scheduler config
+  noise_scheduler:
+    time_min: 0.02  # Original uses 0.02, not 0.002 (avoids numerical issues)
+    time_max: 80.0
+    rho: 7.0
+    bins: 80
+    solver: heun
+    scaling: boundary
+    data_std: 0.5
+    time_sampler: log_normal  # Log-normal sampling avoids small sigmas that cause numerical issues
+    P_mean: -1.2  # Median sigma ≈ 0.30
+    P_std: 1.2
+  # Vision encoder config
+  crop_shape: [84, 84]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  obs_as_global_cond: true
+  # U-Net config
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+  # Training
+  delta: -1.0  # Huber loss delta (-1 = auto-compute per iCT paper, more stable than MSE)
+
+# ================== EMA ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training ==================
+training:
+  device: cuda
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 200  # Reduced - just needs to be good enough for distillation
+  gradient_accumulate_every: 1
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 10
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ema: true
+
+# ================== Dataloader ==================
+dataloader:
+  batch_size: 128  # Increased for A40 (48GB VRAM)
+  shuffle: true
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 128  # Increased for A40
+  shuffle: false
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task ==================
+task:
+  name: pusht_image
+  image_shape: [3, 96, 96]
+  shape_meta: ${shape_meta}
+
+  dataset:
+    _target_: diffusion_policy.dataset.pusht_image_dataset.PushTImageDataset
+    zarr_path: $PROJECT_ROOT/pusht_raw/pusht_cchi_v7_replay.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    seed: 42
+    val_ratio: 0.02
+    max_train_episodes: null
+
+  env_runner:
+    _target_: diffusion_policy.env_runner.pusht_image_runner.PushTImageRunner
+    n_train: 6
+    n_train_vis: 2
+    train_start_seed: 0
+    n_test: 50
+    n_test_vis: 4
+    test_start_seed: 100000
+    max_steps: 300
+    n_obs_steps: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    fps: 10
+    past_action: false
+    n_envs: null
+    legacy_test: true
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 3
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: pusht_consistency_policy
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_edm_teacher_seed${training.seed}
+  tags:
+    - edm
+    - teacher
+    - pusht
+    - seed_${training.seed}
+  id: null
+  group: consistency_policy_benchmark
+
+# ================== Hydra ==================
+hydra:
+  run:
+    dir: "$PROJECT_ROOT/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_edm_teacher_seed${training.seed}"
+  sweep:
+    dir: outputs/edm_teacher/${now:%Y-%m-%d}
+    subdir: seed${training.seed}

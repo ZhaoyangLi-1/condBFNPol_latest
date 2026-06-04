@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=xarm200_s1
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-2
+
+# 0: BFN (true hybrid action)
+# 1: DDPM (one-hot 9D)
+# 2: EDM (one-hot 9D, will be teacher for Consistency)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) CONFIG="train_bfn_pusht_xarm_200"; MODEL="BFN" ;;
+    1) CONFIG="train_ddpm_pusht_xarm_200"; MODEL="DDPM" ;;
+    2) CONFIG="train_edm_pusht_xarm_200"; MODEL="EDM" ;;
+esac
+
+echo "Training $MODEL on PushT-xarm 200-demo (top camera, val_loss checkpoint)"
+python train.py --config-name=$CONFIG
+echo "Done at $(date)"

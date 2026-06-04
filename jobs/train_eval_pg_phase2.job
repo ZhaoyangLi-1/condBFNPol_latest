@@ -1,0 +1,50 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=32G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=pg_phase2
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-3
+
+# 0,1: train Consistency Platform, Goal
+# 2,3: eval Platform, Goal (BFN, DDPM, DDIM, EDM)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0)
+        python train.py --config-name=train_consistency_platform
+        ;;
+    1)
+        python train.py --config-name=train_consistency_goal
+        ;;
+    2)
+        python scripts/eval_platform.py \
+            --bfn_ckpt outputs/2026.05.04/23.00.12_train_bfn_platform_platform/checkpoints/latest.ckpt \
+            --bfn10_ckpt outputs/2026.05.04/23.00.12_train_bfn_platform_platform/checkpoints/latest.ckpt \
+            --ddpm_ckpt outputs/2026.05.04/23.00.12_train_ddpm_platform_platform/checkpoints/latest.ckpt \
+            --ddim_ckpt outputs/2026.05.04/23.00.12_train_ddpm_platform_platform/checkpoints/latest.ckpt \
+            --edm_ckpt outputs/2026.05.04/23.00.11_train_edm_platform_platform/checkpoints/latest.ckpt \
+            --n_episodes 50
+        ;;
+    3)
+        python scripts/eval_goal.py \
+            --bfn_ckpt outputs/2026.05.04/23.00.11_train_bfn_goal_goal/checkpoints/latest.ckpt \
+            --bfn10_ckpt outputs/2026.05.04/23.00.11_train_bfn_goal_goal/checkpoints/latest.ckpt \
+            --ddpm_ckpt outputs/2026.05.04/23.00.13_train_ddpm_goal_goal/checkpoints/latest.ckpt \
+            --ddim_ckpt outputs/2026.05.04/23.00.13_train_ddpm_goal_goal/checkpoints/latest.ckpt \
+            --edm_ckpt outputs/2026.05.04/23.00.11_train_edm_goal_goal/checkpoints/latest.ckpt \
+            --n_episodes 50
+        ;;
+esac
+
+echo "Done at $(date)"

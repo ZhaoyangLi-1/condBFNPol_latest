@@ -1,0 +1,43 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=48:00:00
+#SBATCH --job-name=dlpa_n10_48h
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Train DLPA n=10 for 48h, resuming from previous best checkpoint (-18.36)
+# Goal: match paper's ~50k timesteps and reach positive rewards
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT/_external/DLPA
+
+RESUME_CKPT="result/DLPA/simple_move_4_direction_v1/hard_move_n10_seed0/world_model_best_0.pth"
+SAVE_DIR="hard_move_n10_seed0_48h"
+
+echo "=========================================="
+echo "Training DLPA on Hard Move n=10 (1024 actions) for 48h"
+echo "Resuming from: $RESUME_CKPT"
+echo "Save dir: $SAVE_DIR"
+echo "=========================================="
+
+python main.py \
+    --env 'simple_move_4_direction_v1-v0' \
+    --mpc_horizon 5 \
+    --action_n_dim 10 \
+    --model_type "concat" \
+    --save_points 0 \
+    --max_timesteps 200000 \
+    --eval_freq 2000 \
+    --seed 0 \
+    --save_dir $SAVE_DIR \
+    --resume_from $RESUME_CKPT
+
+echo "Done at $(date)"

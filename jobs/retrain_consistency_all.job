@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=32G
+#SBATCH --time=10:00:00
+#SBATCH --job-name=retrain_cons
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-4
+
+# Retrain Consistency policies with corrected EMA decay (0.999 instead of 0.9)
+# Array index 0:n4, 1:n6, 2:n8, 3:hard_goal, 4:catch_point
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) CONFIG="train_consistency_hard_move_n4"; LABEL="n=4" ;;
+    1) CONFIG="train_consistency_hard_move_n6"; LABEL="n=6" ;;
+    2) CONFIG="train_consistency_hard_move_n8"; LABEL="n=8" ;;
+    3) CONFIG="train_consistency_hard_goal"; LABEL="hard_goal" ;;
+    4) CONFIG="train_consistency_catch_point"; LABEL="catch_point" ;;
+esac
+
+echo "Retraining Consistency $LABEL with EMA decay 0.999"
+python train.py --config-name=$CONFIG
+echo "Done at $(date)"

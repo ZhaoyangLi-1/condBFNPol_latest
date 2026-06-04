@@ -1,0 +1,200 @@
+# ==========================================================
+# Diffusion on real PushT (your data: 480x640) + lowdim eef_pose
+# Align method/timebase with paper, keep your image resolution
+# ==========================================================
+
+defaults:
+  - _self_
+
+_target_: workspaces.train_diffusion_unet_hybrid_workspace.TrainDiffusionUnetHybridWorkspace
+
+name: benchmark_diffusion_pusht_real_image_480x640
+exp_name: bfn_vs_diffusion
+
+# ================== Horizons ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+n_latency_steps: 0
+dataset_obs_steps: ${n_obs_steps}
+obs_as_global_cond: true
+
+# ================== Shape Meta ==================
+# Your collected data resolution (C,H,W)
+image_shape: [3, 480, 640]
+crop_shape: [384, 512]
+dataset_path: $PROJECT_ROOT/data/pusht_real
+
+shape_meta:
+  action:
+    shape: [6]
+  obs:
+    camera_0:
+      shape: ${image_shape}
+      type: rgb
+    camera_1:
+      shape: ${image_shape}
+      type: rgb
+    robot_eef_pose:
+      shape: [6]
+      type: low_dim
+
+# ================== Policy ==================
+policy:
+  _target_: diffusion_policy.policy.diffusion_unet_image_policy.DiffusionUnetImagePolicy
+  shape_meta: ${shape_meta}
+
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddpm.DDPMScheduler
+    num_train_timesteps: 100
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    variance_type: fixed_small
+    clip_sample: true
+    prediction_type: epsilon
+
+  obs_encoder:
+    _target_: diffusion_policy.model.vision.multi_image_obs_encoder.MultiImageObsEncoder
+    shape_meta: ${shape_meta}
+    rgb_model:
+      _target_: diffusion_policy.model.vision.model_getter.get_resnet
+      name: resnet18
+      weights: null
+
+    # keep your native resolution
+    resize_shape: [480, 640]
+
+    # 0.8 ratio crop of (480,640) -> (384,512)
+    crop_shape: ${crop_shape}
+    random_crop: true
+
+    use_group_norm: true
+    share_rgb_model: false
+    imagenet_norm: true
+
+  horizon: ${horizon}
+  n_action_steps: ${eval:'${n_action_steps}+${n_latency_steps}'}
+  n_obs_steps: ${n_obs_steps}
+  num_inference_steps: 100
+  obs_as_global_cond: ${obs_as_global_cond}
+  diffusion_step_embed_dim: 128
+  down_dims: [256, 512, 1024]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== EMA ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 5.0e-5
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-4
+
+# ================== Training ==================
+training:
+  device: cuda
+  seed: 42
+  debug: false
+  resume: false
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 150
+  gradient_accumulate_every: 1
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ema: true
+
+# ================== Dataloader ==================
+dataloader:
+  batch_size: 64
+  shuffle: true
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 64
+  shuffle: false
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task ==================
+task:
+  name: pusht_real_image
+  image_shape: ${image_shape}
+  shape_meta: ${shape_meta}
+
+  dataset:
+    _target_: diffusion_policy.dataset.real_pusht_image_dataset.RealPushTImageDataset
+    shape_meta: ${shape_meta}
+    dataset_path: ${dataset_path}
+    horizon: ${horizon}
+    pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
+    pad_after: ${eval:'${n_action_steps}-1'}
+    n_obs_steps: ${dataset_obs_steps}
+    n_latency_steps: ${n_latency_steps}
+    use_cache: true
+    seed: 42
+    val_ratio: 0.1
+    max_train_episodes: null
+
+    # IMPORTANT:
+    # false if actions are absolute eef pose; true if dataset stores delta pose.
+    delta_action: false
+
+  # NOTE:
+  # Paper runs policy at 10Hz and interpolates commands in controller.
+  # Make sure your real-robot runner uses the same timebase (10Hz).
+  env_runner: null
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: val_loss
+    mode: min
+    k: 1
+    format_str: epoch={epoch:04d}-val_loss={val_loss:.3f}.ckpt
+  save_last_ckpt: false
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: pusht_bfn_vs_diffusion
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_diffusion_real_image_seed${training.seed}
+  tags:
+    - benchmark
+    - pusht_real
+    - diffusion
+    - image_lowdim
+    - res_480x640
+    - pusht_real
+    - seed_${training.seed}
+  id: null
+  group: bfn_vs_diffusion_benchmark
+
+# ================== Hydra ==================
+hydra:
+  run:
+    dir: "$PROJECT_ROOT/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_diffusion_real_image_seed${training.seed}"
+  sweep:
+    dir: outputs/benchmark/${now:%Y-%m-%d}
+    subdir: diffusion_real_image_seed${training.seed}

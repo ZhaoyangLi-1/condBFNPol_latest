@@ -1,0 +1,51 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=dlpa_hard_move
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-2
+
+# Train DLPA on Hard Move with different n values
+# Array index determines n: 0->n=4 (16 actions), 1->n=6 (64 actions), 2->n=8 (256 actions)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT/_external/DLPA
+
+# Map array index to action dimensions
+case $SLURM_ARRAY_TASK_ID in
+    0) ACTION_N_DIM=4 ;;  # 2^4 = 16 discrete actions
+    1) ACTION_N_DIM=6 ;;  # 2^6 = 64 discrete actions
+    2) ACTION_N_DIM=8 ;;  # 2^8 = 256 discrete actions
+esac
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "SLURM_ARRAY_TASK_ID = $SLURM_ARRAY_TASK_ID"
+echo "Training DLPA on Hard Move with n=$ACTION_N_DIM (2^$ACTION_N_DIM = $((2**ACTION_N_DIM)) discrete actions)"
+echo "=========================================="
+
+# Create output directory
+SAVE_DIR="hard_move_n${ACTION_N_DIM}_24h"
+mkdir -p result/DLPA/simple_move_4_direction_v1/$SAVE_DIR
+
+python main.py \
+    --env 'simple_move_4_direction_v1-v0' \
+    --mpc_horizon 5 \
+    --action_n_dim $ACTION_N_DIM \
+    --model_type "concat" \
+    --save_points 0 \
+    --max_timesteps 100000 \
+    --eval_freq 2000 \
+    --seed 0 \
+    --save_dir $SAVE_DIR
+
+echo "Training complete at $(date)"

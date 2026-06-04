@@ -1,0 +1,36 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_edm_cp_hg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-1
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) TASK="catch_point"
+       SCRIPT="eval_catch_point.py"
+       ARGS=""
+       CKPT="outputs/2026.05.03/21.20.03_train_edm_catch_point_catch_point/checkpoints/latest.ckpt" ;;
+    1) TASK="hard_goal"
+       SCRIPT="eval_hard_goal.py"
+       ARGS=""
+       CKPT="outputs/2026.05.01/22.13.48_train_edm_hard_goal_hard_goal/checkpoints/latest.ckpt" ;;
+esac
+
+echo "Evaluating EDM on $TASK"
+python scripts/$SCRIPT $ARGS \
+    --edm_ckpt "$CKPT" \
+    --n_episodes 50
+
+echo "Done at $(date)"

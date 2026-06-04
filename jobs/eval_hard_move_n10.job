@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_hm_n10
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+BFN_CKPT="outputs/2026.05.12/08.09.29_train_bfn_hard_move_n10_hard_move_n10/checkpoints/latest.ckpt"
+DDPM_CKPT="outputs/2026.05.12/08.09.29_train_ddpm_hard_move_n10_hard_move_n10/checkpoints/latest.ckpt"
+EDM_CKPT="outputs/2026.05.12/08.09.31_train_edm_hard_move_n10_hard_move_n10/checkpoints/latest.ckpt"
+CONS_DIR=$(ls -td outputs/*/*_train_consistency_hard_move_n10_hard_move_n10 2>/dev/null | head -1)
+CONS_CKPT="${CONS_DIR}/checkpoints/latest.ckpt"
+
+echo "Evaluating Hard Move n=10 (1024 actions)"
+echo "  BFN:  $BFN_CKPT"
+echo "  DDPM: $DDPM_CKPT"
+echo "  EDM:  $EDM_CKPT"
+echo "  Cons: $CONS_CKPT"
+
+EXTRA_ARGS=""
+if [ -f "$CONS_CKPT" ]; then
+    EXTRA_ARGS="--consistency_ckpt $CONS_CKPT --consistency3_ckpt $CONS_CKPT"
+fi
+
+python scripts/eval_hard_move.py \
+    --n_actuators 10 \
+    --bfn_ckpt "$BFN_CKPT" \
+    --bfn10_ckpt "$BFN_CKPT" \
+    --ddpm_ckpt "$DDPM_CKPT" \
+    --ddim_ckpt "$DDPM_CKPT" \
+    $EXTRA_ARGS \
+    --n_episodes 50
+
+echo "Done at $(date)"

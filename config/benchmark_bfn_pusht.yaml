@@ -1,0 +1,173 @@
+# Benchmark Configuration: BFN vs Diffusion on PushT
+# 
+# This config is for the BFN policy in the benchmark.
+# Run with: python scripts/train_workspace.py --config-name=benchmark_bfn_pusht
+#
+# Key differences from diffusion:
+# - Uses BFN sampling (sigma_1, n_timesteps) instead of DDPM noise schedule
+# - Same U-Net architecture for fair comparison
+
+defaults:
+  - _self_
+
+# Workspace target
+_target_: workspaces.train_bfn_workspace.TrainBFNWorkspace
+
+# Experiment info  
+name: benchmark_bfn_pusht
+exp_name: bfn_vs_diffusion
+
+# ================== Horizons (SAME AS DIFFUSION) ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+
+# ================== Shape Meta ==================
+shape_meta:
+  action:
+    shape: [2]
+  obs:
+    agent_pos:
+      shape: [2]
+      type: low_dim
+    image:
+      shape: [3, 96, 96]
+      type: rgb
+
+# ================== Policy ==================
+policy:
+  _target_: policies.bfn_unet_hybrid_image_policy.BFNUnetHybridImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  # BFN-specific config
+  sigma_1: 0.001
+  n_timesteps: 20
+  # Vision encoder config (SAME AS DIFFUSION)
+  crop_shape: [84, 84]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  # U-Net config (SAME AS DIFFUSION)
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== EMA (SAME AS DIFFUSION) ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer (SAME AS DIFFUSION) ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training (SAME AS DIFFUSION) ==================
+training:
+  device: cuda
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 300
+  gradient_accumulate_every: 1
+  rollout_every: 50
+  checkpoint_every: 100  # Less frequent checkpoints to save disk
+  val_every: 1
+  sample_every: 10  # Less frequent sampling to save disk
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ema: true
+
+# ================== Dataloader (SAME AS DIFFUSION) ==================
+dataloader:
+  batch_size: 64
+  shuffle: true
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 64
+  shuffle: false
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task ==================
+task:
+  name: pusht_image
+  image_shape: [3, 96, 96]
+  shape_meta: ${shape_meta}
+  
+  dataset:
+    _target_: diffusion_policy.dataset.pusht_image_dataset.PushTImageDataset
+    # Use absolute path - override with task.dataset.zarr_path=/path/to/data on cluster
+    zarr_path: $PROJECT_ROOT/data/pusht_sim/pusht_cchi_v7_replay.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    seed: 42
+    val_ratio: 0.02
+    max_train_episodes: null  # Use all episodes for benchmark
+
+  env_runner:
+    _target_: diffusion_policy.env_runner.pusht_image_runner.PushTImageRunner
+    n_train: 6
+    n_train_vis: 2
+    train_start_seed: 0
+    n_test: 50
+    n_test_vis: 4
+    test_start_seed: 100000
+    max_steps: 300
+    n_obs_steps: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    fps: 10
+    past_action: false
+    n_envs: null
+    legacy_test: true
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 3  # Only keep top 3 checkpoints to save disk
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+  save_last_ckpt: false  # Disabled to save disk
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: pusht_bfn_vs_diffusion  # Shared project for comparison
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_bfn_seed${training.seed}
+  tags:
+    - benchmark
+    - pusht
+    - bfn
+    - seed_${training.seed}
+  id: null
+  group: bfn_vs_diffusion_benchmark
+
+# ================== Hydra ==================
+hydra:
+  run:
+    # Replace with your desired output directory
+    dir: "$PROJECT_ROOT/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_bfn_seed${training.seed}"
+  sweep:
+    dir: outputs/benchmark/${now:%Y-%m-%d}
+    subdir: bfn_seed${training.seed}

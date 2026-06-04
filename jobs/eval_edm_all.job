@@ -1,0 +1,34 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_edm
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-2
+
+# Evaluate EDM directly (the teacher used for Consistency)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) N=4; CKPT="outputs/2026.04.29/14.03.33_train_edm_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt" ;;
+    1) N=6; CKPT="outputs/2026.04.29/14.56.57_train_edm_hard_move_n6_hard_move_n6/checkpoints/latest.ckpt" ;;
+    2) N=8; CKPT="outputs/2026.04.29/18.05.00_train_edm_hard_move_n8_hard_move_n8/checkpoints/latest.ckpt" ;;
+esac
+
+echo "Evaluating EDM on Hard Move n=$N"
+python scripts/eval_hard_move.py \
+    --n_actuators $N \
+    --edm_ckpt "$CKPT" \
+    --n_episodes 50
+
+echo "Done at $(date)"

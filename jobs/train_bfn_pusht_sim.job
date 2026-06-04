@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=48G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=bfn_pusht_sim
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Retrain BFN on the standard simulated PushT benchmark (206 demos, image-based).
+# The original checkpoint was deleted; this restores it so we can evaluate BFN-10
+# (same weights at 10 steps) for the Q2 table.
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+export HYDRA_FULL_ERROR=1
+DATA=data/pusht_sim/pusht/pusht_cchi_v7_replay.zarr
+
+echo "Training BFN on simulated PushT (300 epochs, image-based)"
+python train.py --config-name=benchmark_bfn_pusht \
+    task.dataset.zarr_path="$DATA" \
+    training.num_epochs=200 \
+    training.device=cuda \
+    training.seed=42 \
+    checkpoint.save_last_ckpt=true \
+    logging.mode=offline
+echo "Done at $(date)"

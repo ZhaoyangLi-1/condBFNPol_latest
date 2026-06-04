@@ -1,0 +1,41 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=24G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval132
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-7
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+ENVS=(hard_move_n4 hard_move_n6 hard_move_n8 hard_move_n10 hard_goal goal platform catch_point)
+ENV=${ENVS[$SLURM_ARRAY_TASK_ID]}
+
+ck() { ls -td outputs/*/*_train_$1_${ENV}_132_${ENV}_132 2>/dev/null | head -1; }
+BFN="$(ck bfn)/checkpoints/latest.ckpt"
+DDPM="$(ck ddpm)/checkpoints/latest.ckpt"
+EDM="$(ck edm)/checkpoints/latest.ckpt"
+CONS="$(ck consistency)/checkpoints/latest.ckpt"
+
+COMMON="--bfn_ckpt $BFN --bfn10_ckpt $BFN --ddpm_ckpt $DDPM --ddim_ckpt $DDPM --edm_ckpt $EDM --consistency_ckpt $CONS --consistency3_ckpt $CONS --n_episodes 50"
+
+echo "=== Evaluating $ENV (132-ep checkpoints) ==="
+case $ENV in
+    hard_move_n4)  python scripts/eval_hard_move.py --n_actuators 4  $COMMON ;;
+    hard_move_n6)  python scripts/eval_hard_move.py --n_actuators 6  $COMMON ;;
+    hard_move_n8)  python scripts/eval_hard_move.py --n_actuators 8  $COMMON ;;
+    hard_move_n10) python scripts/eval_hard_move.py --n_actuators 10 $COMMON ;;
+    hard_goal)     python scripts/eval_hard_goal.py $COMMON ;;
+    goal)          python scripts/eval_goal.py $COMMON ;;
+    platform)      python scripts/eval_platform.py $COMMON ;;
+    catch_point)   python scripts/eval_catch_point.py $COMMON ;;
+esac
+echo "Done at $(date)"

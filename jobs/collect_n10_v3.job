@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=16G
+#SBATCH --time=8:00:00
+#SBATCH --job-name=collect_n10_v3
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# n=10 demos with reduced episode count to fit in time limit
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+CKPT="_external/DLPA/result/DLPA/simple_move_4_direction_v1/hard_move_n10_seed0_48h/world_model_best_0.pth"
+
+echo "Collecting Hard Move n=10 demos (100 episodes, 8h limit)"
+python scripts/collect_hard_move_demos.py \
+    --n_actuators 10 \
+    --checkpoint "$CKPT" \
+    --n_episodes 100 \
+    --output "data/hard_move_n10/replay.zarr"
+
+echo "Done at $(date)"

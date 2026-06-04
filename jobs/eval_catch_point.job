@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_cp
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+BFN_CKPT="outputs/2026.05.03/21.20.02_train_bfn_catch_point_catch_point/checkpoints/latest.ckpt"
+DDPM_CKPT="outputs/2026.05.03/21.20.04_train_ddpm_catch_point_catch_point/checkpoints/latest.ckpt"
+
+echo "Evaluating Catch Point"
+python scripts/eval_catch_point.py \
+    --bfn_ckpt "$BFN_CKPT" \
+    --bfn10_ckpt "$BFN_CKPT" \
+    --ddpm_ckpt "$DDPM_CKPT" \
+    --ddim_ckpt "$DDPM_CKPT" \
+    --n_episodes 50
+
+echo "Done at $(date)"

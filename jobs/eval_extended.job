@@ -1,0 +1,38 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_extended
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Evaluate BFN-20, BFN-10, DDPM, and DDIM on Extended Lunar Lander (16 actions)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "Evaluating BFN-20, BFN-10, DDPM, DDIM on 16-action Lunar Lander"
+echo "=========================================="
+
+BFN_CKPT="outputs/2026.04.13/09.09.05_train_bfn_hybrid_lunar_lander_extended_lunar_lander_extended/checkpoints/epoch=0150-train_loss=0.0437.ckpt"
+DDPM_CKPT="outputs/2026.04.13/09.09.05_train_ddpm_lunar_lander_extended_lunar_lander_extended/checkpoints/epoch=0150-train_loss=0.0063.ckpt"
+
+# BFN-10 uses same checkpoint as BFN but with 10 steps
+# DDIM uses same checkpoint as DDPM but with DDIM scheduler (10 steps vs 100)
+python scripts/eval_extended.py \
+    --bfn_ckpt "$BFN_CKPT" \
+    --bfn10_ckpt "$BFN_CKPT" \
+    --ddpm_ckpt "$DDPM_CKPT" \
+    --ddim_ckpt "$DDPM_CKPT" \
+    --n_episodes 20
+
+echo "Done at $(date)"

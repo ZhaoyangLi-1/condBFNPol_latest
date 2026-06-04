@@ -1,0 +1,59 @@
+## Build / cache
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.cursor
+
+## Training outputs / artifacts (do not commit experiment runs)
+outputs/
+wandb/
+results/
+result/
+eval_output/
+checkpoints/
+checkpoints*
+cluster_checkpoints/
+logs/
+jobs/logs/
+figures/
+*.png
+*.gif
+
+## Data (must be re-downloaded by users)
+data/
+pusht_raw/
+my_pusht_data/
+
+## Vendored externals (clone via setup instructions)
+_external/
+src/
+diffusion_policy/
+
+## Paper artifacts (not part of the code release)
+BFN_CoRL_2026.zip
+PAPER_HANDOFF.md
+appendix/
+sections/
+main.tex
+*.aux
+*.bbl
+*.blg
+*.log
+*.synctex.gz
+
+## Local / scratch
+.claude/
+memory/
+
+## Exploratory code not used in the paper (kept on disk, excluded from commit)
+*lunar_lander*
+*xarm_orig*
+*xarm_top.*
+*xarm_top_side.*
+**/debug_*
+**/analyze_gripper*
+**/create_thesis_figures*
+**/visualize_predictions_publication*
+*thesis*
+tum_thesis*

@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=ddpm_extended
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Train DDPM on Extended Lunar Lander (16 actions, one-hot encoding)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "SLURM_JOB_NODELIST = $SLURM_JOB_NODELIST"
+echo "=========================================="
+
+echo "Training DDPM on 16-action Lunar Lander at $(date)"
+python train.py --config-name=train_ddpm_lunar_lander_extended
+
+echo "Done at $(date)"

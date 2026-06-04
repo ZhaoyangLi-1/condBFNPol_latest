@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=16G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=collect_hg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Collect Hard Goal demos using DLPA best checkpoint (peak reward +27.77)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+CHECKPOINT="_external/DLPA/result/DLPA/hard_goal/hard_goal_seed0/world_model_best_0.pth"
+
+echo "Collecting Hard Goal demos using best checkpoint"
+python scripts/collect_hard_goal_demos.py \
+    --checkpoint "$CHECKPOINT" \
+    --n_episodes 500 \
+    --output "data/hard_goal/replay.zarr"
+
+echo "Done at $(date)"

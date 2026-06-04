@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
+#SBATCH --time=0:45:00
+#SBATCH --job-name=render_test
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+mkdir -p videos
+
+ARCH=$ARCHIVE_DIR
+BFN=$ARCH/2026.04.29/14.03.32_train_bfn_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt
+DDPM=$ARCH/2026.04.29/14.03.32_train_ddpm_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt
+CONS=$ARCH/2026.04.29/15.34.22_train_consistency_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt
+
+python scripts/render_rollouts.py \
+  --env hard_move_n4 --n_actuators 4 \
+  --bfn_ckpt "$BFN" --ddpm_ckpt "$DDPM" --consistency_ckpt "$CONS" \
+  --seed 7 --out videos/hard_move_n4.mp4 --fps 6
+
+echo "Done at $(date)"
+ls -la videos/

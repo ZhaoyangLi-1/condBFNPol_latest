@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=dlpa_hg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Train DLPA expert on Hard Goal (11 discrete actions, variable continuous params)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT/_external/DLPA
+
+SAVE_DIR="hard_goal_seed0"
+
+echo "=========================================="
+echo "Training DLPA on Hard Goal (11 discrete + variable cont)"
+echo "Save dir: $SAVE_DIR"
+echo "=========================================="
+
+# DLPA paper used model_type "overlay" for Goal-v0; we'll use same for hard_goal
+python main.py \
+    --env 'hard_goal-v0' \
+    --mpc_horizon 8 \
+    --model_type "overlay" \
+    --save_points 0 \
+    --max_timesteps 100000 \
+    --eval_freq 2000 \
+    --seed 0 \
+    --save_dir $SAVE_DIR
+
+echo "Done at $(date)"

@@ -1,0 +1,39 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=dlpa_pg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-1
+
+# Train DLPA expert on Platform (0) and Goal (1)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT/_external/DLPA
+
+case $SLURM_ARRAY_TASK_ID in
+    0) ENV="Platform-v0"; SAVE_DIR="platform_seed0"; HORIZON=10; MODEL_TYPE="multi" ;;
+    1) ENV="Goal-v0"; SAVE_DIR="goal_seed0"; HORIZON=8; MODEL_TYPE="overlay" ;;
+esac
+
+echo "Training DLPA on $ENV"
+echo "horizon=$HORIZON, model_type=$MODEL_TYPE"
+python main.py \
+    --env "$ENV" \
+    --mpc_horizon $HORIZON \
+    --model_type "$MODEL_TYPE" \
+    --save_points 0 \
+    --max_timesteps 50000 \
+    --eval_freq 1000 \
+    --seed 0 \
+    --save_dir $SAVE_DIR
+
+echo "Done at $(date)"

@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=eval_hm_n4
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Evaluate BFN, BFN-10, DDPM, DDIM on Hard Move n=4
+# Consistency is excluded if not yet trained
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+BFN_CKPT="outputs/2026.04.29/14.03.32_train_bfn_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt"
+DDPM_CKPT="outputs/2026.04.29/14.03.32_train_ddpm_hard_move_n4_hard_move_n4/checkpoints/latest.ckpt"
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "Evaluating Hard Move n=4 (16 actions)"
+echo "BFN ckpt:  $BFN_CKPT"
+echo "DDPM ckpt: $DDPM_CKPT"
+echo "=========================================="
+
+python scripts/eval_hard_move.py \
+    --n_actuators 4 \
+    --bfn_ckpt "$BFN_CKPT" \
+    --bfn10_ckpt "$BFN_CKPT" \
+    --ddpm_ckpt "$DDPM_CKPT" \
+    --ddim_ckpt "$DDPM_CKPT" \
+    --n_episodes 50
+
+echo "Done at $(date)"

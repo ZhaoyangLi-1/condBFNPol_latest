@@ -1,0 +1,65 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=eval_edm_con
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Evaluation job for EDM and Consistency policies
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "Starting EDM & Consistency evaluation at $(date)"
+echo "========================================"
+
+# Evaluate EDM
+echo "Evaluating EDM..."
+python scripts/eval_lunar_lander.py \
+    --checkpoint outputs/2026.04.08/15.57.13_train_edm_lunar_lander_lunar_lander/checkpoints/latest.ckpt \
+    --policy_type edm \
+    --num_episodes 50 \
+    --record_video \
+    --video_every 10 \
+    --video_dir outputs/eval_videos/edm \
+    --output outputs/eval_results/edm.json
+
+echo ""
+echo "========================================"
+
+# Evaluate Consistency 1-step
+echo "Evaluating Consistency (1-step)..."
+python scripts/eval_lunar_lander.py \
+    --checkpoint outputs/2026.04.08/23.36.53_train_consistency_1step_lunar_lander_lunar_lander/checkpoints/latest.ckpt \
+    --policy_type consistency_1step \
+    --num_episodes 50 \
+    --record_video \
+    --video_every 10 \
+    --video_dir outputs/eval_videos/consistency_1step \
+    --output outputs/eval_results/consistency_1step.json
+
+echo ""
+echo "========================================"
+
+# Evaluate Consistency 3-step
+echo "Evaluating Consistency (3-step)..."
+python scripts/eval_lunar_lander.py \
+    --checkpoint outputs/2026.04.08/23.37.24_train_consistency_3step_lunar_lander_lunar_lander/checkpoints/latest.ckpt \
+    --policy_type consistency_3step \
+    --num_episodes 50 \
+    --record_video \
+    --video_every 10 \
+    --video_dir outputs/eval_videos/consistency_3step \
+    --output outputs/eval_results/consistency_3step.json
+
+echo ""
+echo "========================================"
+echo "All evaluations completed at $(date)"

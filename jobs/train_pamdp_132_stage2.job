@@ -1,0 +1,35 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=32G
+#SBATCH --time=3:00:00
+#SBATCH --job-name=pamdp132_s2
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-7
+
+# 8 Consistency trainings (one per env), each using the freshly-trained EDM teacher.
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+ENVS=(hard_move_n4 hard_move_n6 hard_move_n8 hard_move_n10 hard_goal goal platform catch_point)
+ENV=${ENVS[$SLURM_ARRAY_TASK_ID]}
+CONFIG="train_consistency_${ENV}_132"
+
+# Locate latest EDM_132 run output for this env
+EDM_RUN=$(ls -td outputs/*/*_train_edm_${ENV}_132_${ENV}_132 2>/dev/null | head -1)
+TEACHER_CKPT="${EDM_RUN}/checkpoints/latest.ckpt"
+if [ ! -f "$TEACHER_CKPT" ]; then
+    echo "ERROR: EDM teacher not found at $TEACHER_CKPT" >&2
+    exit 1
+fi
+
+echo "Training Consistency on ${ENV} (132 ep), teacher: $TEACHER_CKPT"
+python train.py --config-name=$CONFIG policy.teacher_path="$TEACHER_CKPT"
+echo "Done at $(date)"

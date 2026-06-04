@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:v100:1
+#SBATCH --mem=32G
+#SBATCH --time=12:00:00
+#SBATCH --job-name=xarm200_v2
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-2
+
+# v2: horizon=8, n_action_steps=4, +robot_eef_pose (integrated from actions, init=[50,50])
+# 0: BFN
+# 1: DDPM
+# 2: EDM (teacher for Consistency stage 2)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) CONFIG="train_bfn_pusht_xarm_200_v2"; MODEL="BFN" ;;
+    1) CONFIG="train_ddpm_pusht_xarm_200_v2"; MODEL="DDPM" ;;
+    2) CONFIG="train_edm_pusht_xarm_200_v2"; MODEL="EDM" ;;
+esac
+
+echo "Training $MODEL on PushT-xarm 200-demo v2 (h=8, +eef_pose)"
+python train.py --config-name=$CONFIG
+echo "Done at $(date)"

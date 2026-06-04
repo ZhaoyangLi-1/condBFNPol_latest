@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=a40:1
+#SBATCH --mem=80G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=edm_teacher_pusht
+#SBATCH --output=$PROJECT_ROOT/jobs/logs/%x_%j.out
+#SBATCH --error=$PROJECT_ROOT/jobs/logs/%x_%j.err
+
+# Phase 1: Train EDM teacher for Consistency Policy distillation
+# After training completes, use the checkpoint path in train_consistency.job
+#
+# GPU Options (change --gpus-per-task above):
+#   v100:1  - 16GB VRAM, use BATCH_SIZE=32
+#   a40:1   - 48GB VRAM, use BATCH_SIZE=128
+#   a100:1  - 40/80GB VRAM, use BATCH_SIZE=128
+
+# Adjust batch size based on GPU
+BATCH_SIZE=128  # For A100/A40. Use 32 for V100
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd $PROJECT_ROOT
+$HOME/.conda/envs/bfn/bin/python scripts/train_workspace.py \
+    --config-name=train_edm_pusht \
+    dataloader.batch_size=${BATCH_SIZE} \
+    val_dataloader.batch_size=${BATCH_SIZE}

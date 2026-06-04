@@ -1,0 +1,37 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=16G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=collect_demos_n8
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Collect demonstrations from DLPA expert for n=8 (using 24h checkpoint)
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+ACTION_N_DIM=8
+CHECKPOINT="_external/DLPA/result/DLPA/simple_move_4_direction_v1/hard_move_n8_24h/world_model_0.pth"
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "Collecting demos for Hard Move n=$ACTION_N_DIM (256 actions)"
+echo "Checkpoint: $CHECKPOINT"
+echo "Note: Training reward was negative, but MPPI planning at inference may help"
+echo "=========================================="
+
+python scripts/collect_hard_move_demos.py \
+    --n_actuators $ACTION_N_DIM \
+    --checkpoint "$CHECKPOINT" \
+    --n_episodes 500 \
+    --output "data/hard_move_n${ACTION_N_DIM}/replay.zarr"
+
+echo "Done at $(date)"

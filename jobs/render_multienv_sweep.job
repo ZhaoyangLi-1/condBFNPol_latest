@@ -1,0 +1,54 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
+#SBATCH --time=0:25:00
+#SBATCH --job-name=rend_mxs
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-49
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+export SDL_VIDEODRIVER=dummy BFN_NATIVE_RENDER=1
+mkdir -p videos/seed_sweep
+ARCH=/scratch1/abhajha/condBFNPol_archive
+
+IDX=$SLURM_ARRAY_TASK_ID
+# 0-9: hm_n6, 10-19: hm_n8, 20-29: hm_n10, 30-39: catch_point, 40-49: platform
+if [ $IDX -lt 10 ]; then
+  ENV=hard_move_n6; SEED=$IDX; NA=6
+  BFN=$ARCH/2026.04.29/14.56.56_train_bfn_hard_move_n6_hard_move_n6/checkpoints/latest.ckpt
+  DDPM=$ARCH/2026.04.29/14.56.57_train_ddpm_hard_move_n6_hard_move_n6/checkpoints/latest.ckpt
+  CONS=outputs/2026.04.30/01.51.15_train_consistency_hard_move_n6_hard_move_n6/checkpoints/latest.ckpt
+elif [ $IDX -lt 20 ]; then
+  ENV=hard_move_n8; SEED=$((IDX - 10)); NA=8
+  BFN=$ARCH/2026.04.29/18.03.54_train_bfn_hard_move_n8_hard_move_n8/checkpoints/latest.ckpt
+  DDPM=$ARCH/2026.04.29/18.04.27_train_ddpm_hard_move_n8_hard_move_n8/checkpoints/latest.ckpt
+  CONS=outputs/2026.04.30/02.49.00_train_consistency_hard_move_n8_hard_move_n8/checkpoints/latest.ckpt
+elif [ $IDX -lt 30 ]; then
+  ENV=hard_move_n10; SEED=$((IDX - 20)); NA=10
+  BFN=outputs/2026.05.23/19.49.00_train_bfn_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+  DDPM=outputs/2026.05.23/19.49.00_train_ddpm_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+  CONS=outputs/2026.05.23/20.14.31_train_consistency_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+elif [ $IDX -lt 40 ]; then
+  ENV=catch_point; SEED=$((IDX - 30)); NA=0
+  BFN=outputs/2026.05.03/21.20.02_train_bfn_catch_point_catch_point/checkpoints/latest.ckpt
+  DDPM=outputs/2026.05.03/21.20.04_train_ddpm_catch_point_catch_point/checkpoints/latest.ckpt
+  CONS=outputs/2026.05.04/09.54.08_train_consistency_catch_point_catch_point/checkpoints/latest.ckpt
+else
+  ENV=platform; SEED=$((IDX - 40)); NA=0
+  BFN=outputs/2026.05.23/19.49.00_train_bfn_platform_132_platform_132/checkpoints/latest.ckpt
+  DDPM=outputs/2026.05.23/19.49.00_train_ddpm_platform_132_platform_132/checkpoints/latest.ckpt
+  CONS=outputs/2026.05.23/20.14.31_train_consistency_platform_132_platform_132/checkpoints/latest.ckpt
+fi
+
+ARGS="--env $ENV --bfn_ckpt $BFN --ddpm_ckpt $DDPM --consistency_ckpt $CONS --seed $SEED --out videos/seed_sweep/${ENV}_s${SEED}.mp4 --fps 6"
+if [ "$NA" != "0" ]; then ARGS="$ARGS --n_actuators $NA"; fi
+python scripts/render_rollouts.py $ARGS
+echo "Done $ENV s=$SEED"

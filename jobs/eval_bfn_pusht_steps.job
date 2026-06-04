@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:a40:1
+#SBATCH --mem=32G
+#SBATCH --time=1:00:00
+#SBATCH --job-name=eval_bfn_steps
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+export HYDRA_FULL_ERROR=1
+SDL_VIDEODRIVER=dummy python scripts/eval_bfn_pusht_steps.py
+echo "Done at $(date)"

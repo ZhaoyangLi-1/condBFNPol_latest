@@ -1,0 +1,77 @@
+defaults:
+  - _self_
+
+seed:
+  base_seed: 42
+  torch_deterministic: true
+
+env:
+  use_image_obs: false
+  img_size: [84, 84]
+  sub_steps: 1
+  seed_mean: 0.0
+  seed_std: 5000.0
+  seed_min: 0
+  seed_max: 2147483647
+
+sac:
+  total_timesteps: 5_000_000
+  buffer_size: 300_000
+  batch_size: 256
+
+  gamma: 0.99
+  tau: 0.005
+
+  learning_starts: 30_000
+
+  policy_lr: 1.0e-4
+  q_lr: 1.0e-4
+  alpha_lr: 5.0e-5
+
+  policy_frequency: 2
+  target_network_frequency: 2
+
+  autotune: true
+  alpha: 0.2
+
+  ent_c: -0.5
+  ent_d: 0.2
+
+  max_grad_norm: 5.0
+  log_std_min: -5.0
+  log_std_max: -1.0
+
+network:
+  hidden_dims: [256, 256]
+  activation: relu
+  weights_init: xavier
+  bias_init: zeros
+
+training:
+  log_interval: 1000
+  eval_interval: 10_000
+  eval_episodes: 10
+  save_best: true
+  save_final: true
+  output_dir: outputs/hybrid_sac_extended
+
+tqdm:
+  enable: true
+  leave: true
+
+logging:
+  project: hybrid-sac-extended-lunar-lander
+  entity: null
+  mode: disabled
+  name: null
+  group: null
+  tags:
+    - hybrid-sac
+    - lunar_lander_extended
+    - 16-actions
+    - hybrid-action
+    - discrete-continuous
+  notes: null
+  log_model: true
+  watch_model: false
+  watch_log_freq: 1000

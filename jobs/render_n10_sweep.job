@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
+#SBATCH --time=0:30:00
+#SBATCH --job-name=rend_n10s
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-19
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+export SDL_VIDEODRIVER=dummy BFN_NATIVE_RENDER=1
+mkdir -p videos/seed_sweep
+
+SEED=$SLURM_ARRAY_TASK_ID
+BFN=outputs/2026.05.23/19.49.00_train_bfn_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+DDPM=outputs/2026.05.23/19.49.00_train_ddpm_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+CONS=outputs/2026.05.23/20.14.31_train_consistency_hard_move_n10_132_hard_move_n10_132/checkpoints/latest.ckpt
+
+python scripts/render_rollouts.py --env hard_move_n10 --n_actuators 10 \
+  --bfn_ckpt "$BFN" --ddpm_ckpt "$DDPM" --consistency_ckpt "$CONS" \
+  --seed $SEED --out videos/seed_sweep/hard_move_n10_s${SEED}.mp4 --fps 6
+echo "Done s=$SEED"

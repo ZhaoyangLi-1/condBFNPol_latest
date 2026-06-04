@@ -1,0 +1,142 @@
+# Consistency Image Policy on PushT-xarm 200-demo dataset (top camera, 9D one-hot, EDM teacher)
+
+_target_: workspaces.train_consistency_workspace.TrainConsistencyWorkspace
+
+defaults:
+  - _self_
+
+name: train_consistency_pusht_xarm_200_v2
+task_name: pusht_xarm_200_v2
+exp_name: consistency_1step_top
+
+shape_meta:
+  obs:
+    camera_0:
+      shape: [3, 224, 224]
+      type: rgb
+    robot_eef_pose:
+      shape: [2]
+      type: low_dim
+  action:
+    shape: [9]
+
+horizon: 8
+n_obs_steps: 2
+n_action_steps: 4
+n_latency_steps: 0
+dataset_obs_steps: 2
+past_action_visible: false
+obs_as_global_cond: true
+
+policy:
+  _target_: policies.consistency_policy.ConsistencyImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_action_steps: ${n_action_steps}
+  n_obs_steps: ${n_obs_steps}
+  num_train_timesteps: 100
+  num_inference_steps: 1
+  sigma_min: 0.002
+  sigma_max: 80.0
+  rho: 7.0
+  ctm_weight: 1.0
+  dsm_weight: 1.0
+  delta: -1.0  # auto-compute pseudo-Huber delta = sqrt(prod(action_shape)) * 0.00054. delta=0 produces NaN gradients at pred==target.
+  teacher_path: TEACHER_PATH_TO_BE_FILLED  # will be set after EDM training completes
+  initial_ema_decay: 0.999
+  crop_shape: [216, 216]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  diffusion_step_embed_dim: 128
+  down_dims: [256, 512, 1024]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+task:
+  dataset:
+    _target_: dataset.pusht_xarm_dataset.PushTXArmDataset
+    zarr_path: data/pusht_xarm_200/replay.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 3
+    n_obs_steps: ${n_obs_steps}
+    seed: 42
+    val_ratio: 0.1
+    cameras: ["camera_0"]
+    use_eef_pose: true
+    action_mode: onehot
+  env_runner: null
+
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+training:
+  device: cuda:0
+  seed: 42
+  debug: false
+  resume: false
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 200
+  gradient_accumulate_every: 1
+  use_ema: false  # consistency policy has its own student-teacher EMA; outer EMA deepcopy fails on the loaded teacher's torch.Generator
+  rollout_every: 50
+  checkpoint_every: 10
+  val_every: 1
+  sample_every: 5
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+
+dataloader:
+  batch_size: 32
+  num_workers: 4
+  shuffle: true
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 32
+  num_workers: 2
+  shuffle: false
+  pin_memory: true
+  persistent_workers: false
+
+checkpoint:
+  topk:
+    monitor_key: val_loss
+    mode: min
+    k: 3
+    format_str: val_loss={val_loss:.4f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+logging:
+  project: pusht_xarm_200_consistency
+  resume: true
+  mode: offline
+  name: ${now:%Y.%m.%d-%H.%M.%S}_${name}
+  tags: [consistency, pusht_xarm_200, onehot, top]
+  id: null
+  group: null
+
+multi_run:
+  run_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}
+  wandb_name_base: ${now:%Y.%m.%d-%H.%M.%S}_${name}
+
+hydra:
+  run:
+    dir: outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${name}

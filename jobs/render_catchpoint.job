@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:1
+#SBATCH --mem=24G
+#SBATCH --time=0:45:00
+#SBATCH --job-name=rend_catch
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+mkdir -p videos
+
+BFN=outputs/2026.05.03/21.20.02_train_bfn_catch_point_catch_point/checkpoints/latest.ckpt
+DDPM=outputs/2026.05.03/21.20.04_train_ddpm_catch_point_catch_point/checkpoints/latest.ckpt
+CONS=outputs/2026.05.04/09.54.08_train_consistency_catch_point_catch_point/checkpoints/latest.ckpt
+
+python scripts/render_rollouts.py \
+  --env catch_point \
+  --bfn_ckpt "$BFN" --ddpm_ckpt "$DDPM" --consistency_ckpt "$CONS" \
+  --seed 7 --out videos/catch_point.mp4 --fps 6
+
+echo "Done at $(date)"

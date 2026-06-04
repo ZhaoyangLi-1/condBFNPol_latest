@@ -1,0 +1,36 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=collect_demos
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+# Collect demonstrations from trained SAC expert
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "=========================================="
+echo "SLURM_JOB_ID = $SLURM_JOB_ID"
+echo "SLURM_JOB_NODELIST = $SLURM_JOB_NODELIST"
+echo "=========================================="
+
+echo "Collecting demos at $(date)"
+
+python scripts/collect_extended_demos.py \
+    --checkpoint outputs/hybrid_sac_extended/checkpoints/best_model.pt \
+    --num_episodes 500 \
+    --output data/lunar_lander_extended/replay.zarr \
+    --video_dir outputs/demo_videos \
+    --video_every 50 \
+    --min_reward 100
+
+echo "Done at $(date)"

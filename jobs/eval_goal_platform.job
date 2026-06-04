@@ -1,0 +1,43 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=24G
+#SBATCH --time=1:30:00
+#SBATCH --job-name=eval_gp
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-1
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+ENVS=(goal platform)
+ENV=${ENVS[$SLURM_ARRAY_TASK_ID]}
+
+if [ "$ENV" = "goal" ]; then
+    BFN=outputs/2026.05.04/23.00.11_train_bfn_goal_goal/checkpoints/latest.ckpt
+    DDPM=outputs/2026.05.04/23.00.13_train_ddpm_goal_goal/checkpoints/latest.ckpt
+    EDM=outputs/2026.05.04/23.00.11_train_edm_goal_goal/checkpoints/latest.ckpt
+    CONS=outputs/2026.05.05/00.09.31_train_consistency_goal_goal/checkpoints/latest.ckpt
+    SCRIPT=scripts/eval_goal.py
+else
+    BFN=outputs/2026.05.04/23.00.12_train_bfn_platform_platform/checkpoints/latest.ckpt
+    DDPM=outputs/2026.05.04/23.00.12_train_ddpm_platform_platform/checkpoints/latest.ckpt
+    EDM=outputs/2026.05.04/23.00.11_train_edm_platform_platform/checkpoints/latest.ckpt
+    CONS=outputs/2026.05.05/00.09.30_train_consistency_platform_platform/checkpoints/latest.ckpt
+    SCRIPT=scripts/eval_platform.py
+fi
+
+echo "=== Evaluating $ENV ==="
+python $SCRIPT \
+    --bfn_ckpt "$BFN" --bfn10_ckpt "$BFN" \
+    --ddpm_ckpt "$DDPM" --ddim_ckpt "$DDPM" \
+    --edm_ckpt "$EDM" \
+    --consistency_ckpt "$CONS" --consistency3_ckpt "$CONS" \
+    --n_episodes 50
+echo "Done at $(date)"

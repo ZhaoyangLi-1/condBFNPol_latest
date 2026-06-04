@@ -1,0 +1,33 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gres=gpu:p100:1
+#SBATCH --mem=32G
+#SBATCH --time=2:00:00
+#SBATCH --job-name=pamdp132_s1
+#SBATCH --output=jobs/logs/%x_%a_%j.out
+#SBATCH --error=jobs/logs/%x_%a_%j.err
+#SBATCH --array=0-23
+
+# 24 trainings: 8 envs * 3 baselines (BFN, DDPM, EDM)
+# Consistency runs in stage 2 after EDM completes.
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+# Index encoding: array_id = env_idx * 3 + policy_idx
+ENVS=(hard_move_n4 hard_move_n6 hard_move_n8 hard_move_n10 hard_goal goal platform catch_point)
+POLICIES=(bfn ddpm edm)
+ENV_IDX=$(( SLURM_ARRAY_TASK_ID / 3 ))
+POL_IDX=$(( SLURM_ARRAY_TASK_ID % 3 ))
+ENV=${ENVS[$ENV_IDX]}
+POLICY=${POLICIES[$POL_IDX]}
+CONFIG="train_${POLICY}_${ENV}_132"
+
+echo "Training ${POLICY} on ${ENV} (132-episode subsample)"
+python train.py --config-name=$CONFIG
+echo "Done at $(date)"

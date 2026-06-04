@@ -1,0 +1,194 @@
+# Consistency Policy Training Configuration for PushT
+#
+# This config trains a Consistency Policy student by distilling
+# a pretrained EDM teacher. The student can generate actions in
+# 1 step (fastest) or use multi-step chaining for better quality.
+#
+# Prerequisites: Train EDM teacher first with train_edm_pusht.yaml
+#
+# Run with: python train.py --config-name=train_consistency_pusht \
+#           policy.teacher_path=/path/to/edm_teacher/checkpoints/best.ckpt
+
+defaults:
+  - _self_
+
+# Workspace target (uses same workspace as BFN - just calls compute_loss)
+_target_: workspaces.train_consistency_workspace.TrainConsistencyWorkspace
+
+# Experiment info
+name: train_consistency_pusht
+exp_name: consistency_student
+
+# ================== Horizons ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+
+# ================== Shape Meta ==================
+shape_meta:
+  action:
+    shape: [2]
+  obs:
+    agent_pos:
+      shape: [2]
+      type: low_dim
+    image:
+      shape: [3, 96, 96]
+      type: rgb
+
+# ================== Policy ==================
+policy:
+  _target_: policies.consistency_policy.ConsistencyImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+
+  # Teacher checkpoint (REQUIRED - set via command line or modify this path)
+  teacher_path: null  # Override with: policy.teacher_path=/path/to/checkpoint.ckpt
+  inference_mode: false
+
+  # CTM Scheduler config
+  noise_scheduler:
+    time_min: 0.02  # Must match teacher for consistency
+    time_max: 80.0
+    rho: 7.0
+    bins: 80
+    solver: heun
+    scaling: boundary
+    data_std: 0.5
+    ode_steps_max: 1
+
+  # Inference settings
+  num_inference_steps: 1  # 1 = single-step (fastest), 3 = recommended
+  chaining_times: ['D', 27, 54]  # For multi-step chaining
+
+  # Loss configuration
+  losses:
+    ctm: 1.0  # CTM (Consistency Training Model) loss weight
+    dsm: 0.5  # DSM (Denoising Score Matching) loss weight
+  dsm_weights: none
+
+  # Training parameters
+  dropout_rate: 0.2  # Important for consistency training
+  delta: -1.0  # Huber loss delta (-1 = auto-compute, more stable)
+  initial_ema_decay: 0.9
+
+  # Vision encoder config (MUST MATCH TEACHER)
+  crop_shape: [84, 84]
+  obs_encoder_group_norm: true
+  eval_fixed_crop: true
+  obs_as_global_cond: true
+
+  # U-Net config (MUST MATCH TEACHER for warm-start)
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== Optimizer ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training ==================
+training:
+  device: cuda
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 100  # Faster than teacher training
+  gradient_accumulate_every: 1
+  rollout_every: 25
+  checkpoint_every: 25
+  val_every: 1
+  sample_every: 10
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ema: false  # Consistency policy has its own internal EMA
+
+# ================== Dataloader ==================
+dataloader:
+  batch_size: 128  # Increased for A40 (48GB VRAM)
+  shuffle: true
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 128  # Increased for A40
+  shuffle: false
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task ==================
+task:
+  name: pusht_image
+  image_shape: [3, 96, 96]
+  shape_meta: ${shape_meta}
+
+  dataset:
+    _target_: diffusion_policy.dataset.pusht_image_dataset.PushTImageDataset
+    zarr_path: $PROJECT_ROOT/pusht_raw/pusht_cchi_v7_replay.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    seed: 42
+    val_ratio: 0.02
+    max_train_episodes: null
+
+  env_runner:
+    _target_: diffusion_policy.env_runner.pusht_image_runner.PushTImageRunner
+    n_train: 6
+    n_train_vis: 2
+    train_start_seed: 0
+    n_test: 50
+    n_test_vis: 4
+    test_start_seed: 100000
+    max_steps: 300
+    n_obs_steps: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    fps: 10
+    past_action: false
+    n_envs: null
+    legacy_test: true
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 3
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: pusht_consistency_policy
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_consistency_student_seed${training.seed}
+  tags:
+    - consistency
+    - student
+    - pusht
+    - seed_${training.seed}
+  id: null
+  group: consistency_policy_benchmark
+
+# ================== Hydra ==================
+hydra:
+  run:
+    dir: "$PROJECT_ROOT/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_consistency_seed${training.seed}"
+  sweep:
+    dir: outputs/consistency/${now:%Y-%m-%d}
+    subdir: seed${training.seed}

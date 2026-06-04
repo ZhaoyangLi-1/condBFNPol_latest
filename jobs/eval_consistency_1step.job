@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=32G
+#SBATCH --time=1:00:00
+#SBATCH --job-name=eval_con1
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+echo "Evaluating Consistency 1-step at $(date)"
+python scripts/eval_lunar_lander.py \
+    --checkpoint outputs/2026.04.08/23.36.53_train_consistency_1step_lunar_lander_lunar_lander/checkpoints/latest.ckpt \
+    --policy_type consistency_1step \
+    --num_episodes 50 \
+    --record_video \
+    --video_every 10 \
+    --video_dir outputs/eval_videos/consistency_1step \
+    --output outputs/eval_results/consistency_1step.json
+
+echo "Done at $(date)"

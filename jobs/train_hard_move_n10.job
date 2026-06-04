@@ -1,0 +1,28 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=32G
+#SBATCH --time=24:00:00
+#SBATCH --job-name=train_hm_n10
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-2
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) CONFIG="train_bfn_hard_move_n10"; MODEL="BFN" ;;
+    1) CONFIG="train_ddpm_hard_move_n10"; MODEL="DDPM" ;;
+    2) CONFIG="train_edm_hard_move_n10"; MODEL="EDM" ;;
+esac
+
+echo "Training $MODEL on Hard Move n=10 (1024 actions)"
+python train.py --config-name=$CONFIG
+echo "Done at $(date)"

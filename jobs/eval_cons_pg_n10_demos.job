@@ -1,0 +1,45 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=p100:1
+#SBATCH --mem=16G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=cons_pg_n10
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-2
+
+# 0: eval Consistency Platform
+# 1: eval Consistency Goal
+# 2: re-collect n=10 demos with better expert
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0)
+        CKPT="outputs/2026.05.05/00.09.30_train_consistency_platform_platform/checkpoints/latest.ckpt"
+        python scripts/eval_platform.py \
+            --consistency_ckpt "$CKPT" --consistency3_ckpt "$CKPT" \
+            --n_episodes 50
+        ;;
+    1)
+        CKPT="outputs/2026.05.05/00.09.31_train_consistency_goal_goal/checkpoints/latest.ckpt"
+        python scripts/eval_goal.py \
+            --consistency_ckpt "$CKPT" --consistency3_ckpt "$CKPT" \
+            --n_episodes 50
+        ;;
+    2)
+        CKPT="_external/DLPA/result/DLPA/simple_move_4_direction_v1/hard_move_n10_seed0_48h/world_model_best_0.pth"
+        python scripts/collect_hard_move_demos.py \
+            --n_actuators 10 --checkpoint "$CKPT" \
+            --n_episodes 200 --output "data/hard_move_n10_v2/replay.zarr"
+        ;;
+esac
+
+echo "Done at $(date)"

@@ -1,0 +1,35 @@
+#!/bin/bash
+#SBATCH --account=biyik_1173
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --gpus-per-task=v100:1
+#SBATCH --mem=16G
+#SBATCH --time=4:00:00
+#SBATCH --job-name=collect_pg
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+#SBATCH --array=0-1
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+
+cd "$SLURM_SUBMIT_DIR"
+
+case $SLURM_ARRAY_TASK_ID in
+    0) TASK="platform"
+       SCRIPT="collect_platform_demos.py"
+       CKPT="_external/DLPA/result/DLPA/Platform/platform_seed0/world_model_best_0.pth" ;;
+    1) TASK="goal"
+       SCRIPT="collect_goal_demos.py"
+       CKPT="_external/DLPA/result/DLPA/Goal/goal_seed0/world_model_best_0.pth" ;;
+esac
+
+echo "Collecting $TASK demos using best DLPA checkpoint"
+python scripts/$SCRIPT \
+    --checkpoint "$CKPT" \
+    --n_episodes 500 \
+    --output "data/$TASK/replay.zarr"
+
+echo "Done at $(date)"

@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --gres=gpu:v100:1
+#SBATCH --mem=32G
+#SBATCH --time=8:00:00
+#SBATCH --job-name=xarm200_v2_cons
+#SBATCH --output=jobs/logs/%x_%j.out
+#SBATCH --error=jobs/logs/%x_%j.err
+
+source /apps/conda/miniforge3/24.11.3/etc/profile.d/conda.sh
+conda activate bfn
+cd "$SLURM_SUBMIT_DIR"
+
+EDM_RUN=$(ls -td outputs/*/*_train_edm_pusht_xarm_200_v2 2>/dev/null | head -1)
+TEACHER_CKPT="${EDM_RUN}/checkpoints/latest.ckpt"
+
+if [ ! -f "$TEACHER_CKPT" ]; then
+    echo "ERROR: EDM v2 teacher not found at $TEACHER_CKPT" >&2
+    exit 1
+fi
+echo "Using EDM v2 teacher: $TEACHER_CKPT"
+
+python train.py --config-name=train_consistency_pusht_xarm_200_v2 \
+    policy.teacher_path="$TEACHER_CKPT"
+echo "Done at $(date)"

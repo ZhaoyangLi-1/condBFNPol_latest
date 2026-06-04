@@ -1,0 +1,194 @@
+# DDIM (Denoising Diffusion Implicit Models) Training Configuration for PushT
+#
+# DDIM allows faster inference with fewer denoising steps while maintaining
+# similar quality to DDPM. Key difference: deterministic sampling.
+#
+# Reference: https://arxiv.org/abs/2010.02502
+#
+# Run with: python train.py --config-name=train_ddim_pusht
+
+defaults:
+  - _self_
+
+# Workspace target - uses diffusion policy workspace (no robomimic dependency)
+_target_: diffusion_policy.workspace.train_diffusion_unet_image_workspace.TrainDiffusionUnetImageWorkspace
+
+# Experiment info
+name: train_ddim_pusht
+exp_name: ddim_baseline
+
+# ================== Horizons ==================
+horizon: 16
+n_obs_steps: 2
+n_action_steps: 8
+past_action_visible: false
+keypoint_visible_rate: 1.0
+
+# ================== Shape Meta ==================
+shape_meta:
+  action:
+    shape: [2]
+  obs:
+    image:
+      shape: [3, 96, 96]
+      type: rgb
+
+# ================== Policy ==================
+policy:
+  _target_: diffusion_policy.policy.diffusion_unet_image_policy.DiffusionUnetImagePolicy
+  shape_meta: ${shape_meta}
+  horizon: ${horizon}
+  n_obs_steps: ${n_obs_steps}
+  n_action_steps: ${n_action_steps}
+  num_inference_steps: 10           # Only 10 steps at inference (vs 100 for DDPM)
+  obs_as_global_cond: true
+
+  # DDIM Scheduler - deterministic sampling
+  noise_scheduler:
+    _target_: diffusers.schedulers.scheduling_ddim.DDIMScheduler
+    num_train_timesteps: 100        # Train with 100 steps
+    beta_start: 0.0001
+    beta_end: 0.02
+    beta_schedule: squaredcos_cap_v2
+    clip_sample: true
+    set_alpha_to_one: true
+    steps_offset: 0
+    prediction_type: epsilon        # Predict noise (not sample)
+
+  # Vision encoder - using MultiImageObsEncoder (no robomimic dependency)
+  obs_encoder:
+    _target_: diffusion_policy.model.vision.multi_image_obs_encoder.MultiImageObsEncoder
+    shape_meta: ${shape_meta}
+    rgb_model:
+      _target_: diffusion_policy.model.vision.model_getter.get_resnet
+      name: resnet18
+      weights: null  # Train from scratch for fair comparison
+    resize_shape: null
+    crop_shape: [84, 84]
+    random_crop: true
+    use_group_norm: true
+    share_rgb_model: false
+    imagenet_norm: false
+
+  # U-Net config
+  diffusion_step_embed_dim: 128
+  down_dims: [512, 1024, 2048]
+  kernel_size: 5
+  n_groups: 8
+  cond_predict_scale: true
+
+# ================== EMA ==================
+ema:
+  _target_: diffusion_policy.model.diffusion.ema_model.EMAModel
+  update_after_step: 0
+  inv_gamma: 1.0
+  power: 0.75
+  min_value: 0.0
+  max_value: 0.9999
+
+# ================== Optimizer ==================
+optimizer:
+  _target_: torch.optim.AdamW
+  lr: 1.0e-4
+  betas: [0.95, 0.999]
+  eps: 1.0e-8
+  weight_decay: 1.0e-6
+
+# ================== Training ==================
+training:
+  device: cuda
+  seed: 42
+  debug: false
+  resume: true
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  num_epochs: 200
+  gradient_accumulate_every: 1
+  rollout_every: 50
+  checkpoint_every: 50
+  val_every: 1
+  sample_every: 10
+  max_train_steps: null
+  max_val_steps: null
+  tqdm_interval_sec: 1.0
+  use_ema: true
+  freeze_encoder: false
+
+# ================== Dataloader ==================
+dataloader:
+  batch_size: 128
+  shuffle: true
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+val_dataloader:
+  batch_size: 128
+  shuffle: false
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: false
+
+# ================== Task ==================
+task:
+  name: pusht_image
+  image_shape: [3, 96, 96]
+  shape_meta: ${shape_meta}
+
+  dataset:
+    _target_: diffusion_policy.dataset.pusht_image_dataset.PushTImageDataset
+    zarr_path: $PROJECT_ROOT/pusht_raw/pusht_cchi_v7_replay.zarr
+    horizon: ${horizon}
+    pad_before: 1
+    pad_after: 7
+    seed: 42
+    val_ratio: 0.02
+    max_train_episodes: null
+
+  env_runner:
+    _target_: diffusion_policy.env_runner.pusht_image_runner.PushTImageRunner
+    n_train: 6
+    n_train_vis: 2
+    train_start_seed: 0
+    n_test: 50
+    n_test_vis: 4
+    test_start_seed: 100000
+    max_steps: 300
+    n_obs_steps: ${n_obs_steps}
+    n_action_steps: ${n_action_steps}
+    n_envs: 1  # Disable parallel envs to avoid shared_memory issues
+    fps: 10
+    past_action: false
+    legacy_test: true
+
+# ================== Checkpoint ==================
+checkpoint:
+  topk:
+    monitor_key: test_mean_score
+    mode: max
+    k: 3
+    format_str: epoch={epoch:04d}-test_mean_score={test_mean_score:.3f}.ckpt
+  save_last_ckpt: true
+  save_last_snapshot: false
+
+# ================== Logging ==================
+logging:
+  project: pusht_consistency_policy
+  resume: true
+  mode: online
+  name: ${now:%Y.%m.%d-%H.%M.%S}_ddim_baseline_seed${training.seed}
+  tags:
+    - ddim
+    - baseline
+    - pusht
+    - seed_${training.seed}
+  id: null
+  group: consistency_policy_benchmark
+
+# ================== Hydra ==================
+hydra:
+  run:
+    dir: "$PROJECT_ROOT/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_ddim_seed${training.seed}"
+  sweep:
+    dir: outputs/ddim/${now:%Y-%m-%d}
+    subdir: seed${training.seed}
