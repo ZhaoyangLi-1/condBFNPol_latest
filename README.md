@@ -164,6 +164,8 @@ Per-environment 4-up grid videos are in `videos/`:
 | `goal.mp4`          | BFN scores; baselines miss |
 | `hard_goal.mp4`     | BFN/DDIM/DDPM score; Cons-1 misses |
 | `platform.mp4`      | BFN/DDIM/DDPM cross all platforms; Cons-1 falls |
+| `xArm.mp4`  | Real Push-T with hybrid action space using xArm |
+| `widowx.mp4`  | Real Push-T with the continuous action space using WidowX |
 
 ## Repository Layout
 
