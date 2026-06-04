@@ -19,7 +19,7 @@
 #SBATCH --output=logs/hybrid_%j.out
 #SBATCH --error=logs/hybrid_%j.err
 #SBATCH --time=47:00:00
-#SBATCH --partition=lrz-hgx-h100-94x4
+#SBATCH --partition=GPU_PARTITION
 #SBATCH --qos=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4

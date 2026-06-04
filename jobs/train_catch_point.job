@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=biyik_1173
+#SBATCH --account=ACCOUNT_NAME
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

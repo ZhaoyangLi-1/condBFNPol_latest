@@ -3,7 +3,7 @@
 #SBATCH --output=logs/robomimic-%j.out
 #SBATCH --error=logs/robomimic-%j.out
 #SBATCH --time=48:00:00
-#SBATCH --partition=lrz-hgx-a100-80x4
+#SBATCH --partition=GPU_PARTITION
 #SBATCH --qos=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8

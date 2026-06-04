@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=pusht_benchmark
-#SBATCH --partition=lrz-hgx-h100-94x4    # H100 partition
+#SBATCH --partition=GPU_PARTITION    # H100 partition
 #SBATCH --gres=gpu:1                     # Request 1 H100 GPU
 #SBATCH --cpus-per-task=16               # 16 CPU cores for fast data loading
 #SBATCH --mem=64G                        # 64GB RAM
@@ -44,12 +44,12 @@ if command -v nvidia-smi &> /dev/null; then
 fi
 
 # Set environment variables
-export WANDB_API_KEY='YOUR_API_KEY'
+export WANDB_API_KEY="${WANDB_API_KEY:-}"
 export PYTHONPATH=.
 export HYDRA_FULL_ERROR=1
 
 # ================== Disk Space Management ==================
-# Use home directory for outputs (LRZ setup)
+# Use home directory for outputs (cluster setup)
 # Your home: $PROJECT_ROOT
 SCRATCH_DIR="${SCRATCH_DIR:-$HOME}"
 OUTPUT_DIR="${SCRATCH_DIR}/condBFNPol/outputs"
@@ -71,12 +71,12 @@ SEEDS="${SEEDS:-42 43 44}"
 EPOCHS="${EPOCHS:-300}"
 DEVICE="${DEVICE:-cuda:0}"
 PROJECT="${PROJECT:-pusht-benchmark}"
-ENTITY="${ENTITY:-aleyna-research}"
+ENTITY="${ENTITY:-}"
 NUM_WORKERS="${NUM_WORKERS:-8}"  # Reduced to avoid memory issues
 
 # Data path - auto-detect based on hostname or set explicitly
 if [ -z "$DATA_PATH" ]; then
-    if [[ "$(hostname)" == *"lrz"* ]] || [[ "$(hostname)" == *"gpu"* ]]; then
+    if [[ -n "${SLURM_JOB_ID:-}" ]] || [[ "$(hostname)" == *"gpu"* ]]; then
         # Cluster path
         DATA_PATH="$PROJECT_ROOT/data/pusht/pusht_cchi_v7_replay.zarr"
     else

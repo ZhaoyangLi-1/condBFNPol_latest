@@ -3,7 +3,7 @@
 #SBATCH --output=logs/ablation-%j.out
 #SBATCH --error=logs/ablation-%j.out
 #SBATCH --time=04:00:00
-#SBATCH --partition=lrz-hgx-h100-94x4
+#SBATCH --partition=GPU_PARTITION
 #SBATCH --qos=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
